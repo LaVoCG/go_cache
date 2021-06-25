@@ -41,8 +41,15 @@ func (gcache *genericMemoryCacheStruct) Set(key string, data interface{}, ttl ti
 }
 
 func (gcache *genericMemoryCacheStruct) Delete(key string) {
+	_, ok := gcache.data[key]
+	if ok {
+		delete(gcache.data, key)
+	} else {
+		log.Print("Could not find record to delete")
+	}
 }
 
+// constructor function to initialize map data type
 func NewGenericMemoryCache() *genericMemoryCacheStruct {
 	return &genericMemoryCacheStruct{
 		data: make(map[string]cacheData),
@@ -51,7 +58,7 @@ func NewGenericMemoryCache() *genericMemoryCacheStruct {
 
 func main() {
 	var newcache GenericMemoryCache = NewGenericMemoryCache()
-	var tmpvalue interface{} = "Just Some Value"
+	var tmpvalue interface{} = "Just Some Random Value"
 	newcache.Set("stringvalue", tmpvalue, 5*time.Minute)
 
 	// output
@@ -60,4 +67,5 @@ func main() {
 		log.Print("could not retrieve value: 'stringvalue'")
 	}
 	fmt.Println("Value returned from cache: ", outValue)
+
 }
