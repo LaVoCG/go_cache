@@ -3,12 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
-	"math/rand"
 	"sync"
 	"time"
 )
 
-var lock = sync.RWMutex{}
 var wg = sync.WaitGroup{}
 
 type GenericMemoryCache interface {
@@ -75,6 +73,24 @@ func (gcache *genericMemoryCacheStruct) clean() {
 	}
 }
 
+func (gcache *genericMemoryCacheStruct) StartStaleDataCleaner(wg *sync.WaitGroup) {
+	wg.Add(1)
+	go func(wg *sync.WaitGroup) {
+	inf_loop: //using label for the purpose of breaking out of infinite for loop
+		for {
+			//using select switch to introduce non-blocking listening on the channels, to have a way to stop goroutine when signal is received
+			select {
+			case <-gcache.ticker.C:
+				gcache.clean()
+			case <-gcache.doneCh:
+				break inf_loop
+			}
+		}
+		wg.Done()
+	}(wg)
+
+}
+
 // constructor function to initialize map data type
 func NewGenericMemoryCache(cleaningInterval time.Duration) *genericMemoryCacheStruct {
 	cache := &genericMemoryCacheStruct{
@@ -83,46 +99,21 @@ func NewGenericMemoryCache(cleaningInterval time.Duration) *genericMemoryCacheSt
 		doneCh: make(chan struct{}),
 	}
 	// start background expired data cleaner and add it to waitgroup
-	wg.Add(1)
-	cache.StartStaleDataCleaner()
+	cache.StartStaleDataCleaner(&wg)
 	return cache
-}
-
-func supplyData(cache GenericMemoryCache) {
-
-	rand.Seed(time.Now().UnixNano())
-	forrange := rand.Intn(50) + 10
-	for i := 0; i < forrange; i++ {
-		//random sleep time to simulate unknown processing time
-		go func() {
-			time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
-
-		}()
-	}
-}
-
-func (gcache *genericMemoryCacheStruct) StartStaleDataCleaner() {
-	wg.Add(1)
-	go func() {
-		for {
-			//using select switch to introduce non-blocking listening on the channels, to have a way to stop goroutine when
-			select {
-			case <-gcache.ticker.C:
-				gcache.clean()
-			case <-gcache.doneCh:
-				wg.Done()
-				break
-			}
-		}
-	}()
-
 }
 
 func cleanup(cache GenericMemoryCache) {
 	datastruct, ok := cache.(*genericMemoryCacheStruct)
 	if ok {
 		close(datastruct.doneCh)
+		datastruct.ticker.Stop()
+		for key := range datastruct.data {
+			delete(datastruct.data, key)
+		}
+		datastruct.data = nil
 	}
+	cache = nil
 }
 
 func main() {
