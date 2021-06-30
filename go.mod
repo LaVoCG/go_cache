@@ -1,3 +1,3 @@
-module github.com/lavo/go_cache
+module github.com/LaVoCG/go_cache
 
 go 1.16
