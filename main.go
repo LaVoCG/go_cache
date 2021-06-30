@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -98,43 +96,7 @@ func NewGenericMemoryCache(cleaningInterval time.Duration) *genericMemoryCacheSt
 		ticker: time.NewTicker(cleaningInterval),
 		doneCh: make(chan struct{}),
 	}
-	// start background expired data cleaner and add it to waitgroup
+	// start background expired data cleaner
 	cache.StartStaleDataCleaner(&wg)
 	return cache
-}
-
-func cleanup(cache GenericMemoryCache) {
-	datastruct, ok := cache.(*genericMemoryCacheStruct)
-	if ok {
-		close(datastruct.doneCh)
-		datastruct.ticker.Stop()
-		for key := range datastruct.data {
-			delete(datastruct.data, key)
-		}
-		datastruct.data = nil
-	}
-	cache = nil
-}
-
-func main() {
-	var newcache GenericMemoryCache = NewGenericMemoryCache(time.Duration(2 * time.Second))
-
-	defer cleanup(newcache)
-	var tmpvalue interface{} = "Just Some Random Value"
-	newcache.Set("stringvalue", tmpvalue, 5*time.Minute)
-
-	outValue, ok := newcache.Get("stringvalue")
-	if !ok {
-		log.Print("could not retrieve value: 'stringvalue'")
-	}
-	fmt.Println("Value returned from cache: ", outValue)
-
-	//adding a simple goroutine, to gracefully shutdown after certain amount of time.
-	wg.Add(1)
-	go func() {
-		time.Sleep(time.Duration(20 * time.Second))
-		cleanup(newcache)
-	}()
-
-	wg.Wait()
 }

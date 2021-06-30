@@ -33,22 +33,25 @@ func searchRecord(keyToFind string, valueToFind interface{}) bool {
 }
 
 //setup the structs/interface for the test to work with. any other additional setup should be done on each test case
-func setupTestCase(t *testing.T, interval time.Duration) func(t *testing.T) {
+func setupTestCase(t *testing.T, interval time.Duration, useDefaultConstructor bool) func(t *testing.T) {
 	t.Log("SetUp Test Case")
 
-	genericCache = &genericMemoryCacheStruct{
-		data:   make(map[string]*cacheData),
-		ticker: time.NewTicker(interval),
-		doneCh: make(chan struct{}),
+	if useDefaultConstructor {
+		genericCache = NewGenericMemoryCache(interval)
+	} else {
+		genericCache = &genericMemoryCacheStruct{
+			data:   make(map[string]*cacheData),
+			ticker: time.NewTicker(interval),
+			doneCh: make(chan struct{}),
+		}
 	}
-
 	//teardown
 	return func(t *testing.T) {
 		t.Log("Teardown Test Case")
 		datastruct, ok := genericCache.(*genericMemoryCacheStruct)
 		if ok {
-			close(datastruct.doneCh)
 			datastruct.ticker.Stop()
+			close(datastruct.doneCh)
 			for key := range datastruct.data {
 				delete(datastruct.data, key)
 			}
@@ -60,7 +63,7 @@ func setupTestCase(t *testing.T, interval time.Duration) func(t *testing.T) {
 func TestSet(t *testing.T) {
 	//setup and teardown test data
 	//duration time does not matter in this test case as automatic cleanup is not enabled in setup, but should be added for consistency
-	teardownTestCase := setupTestCase(t, time.Duration(1*time.Second))
+	teardownTestCase := setupTestCase(t, time.Duration(1*time.Hour), true)
 	defer teardownTestCase(t)
 	var found bool
 	var testCases = []TestDataItem{
@@ -105,13 +108,13 @@ func TestSet(t *testing.T) {
 		found = false
 		found = searchRecord(value.inputkey, value.inputvalue)
 		if !found {
-			t.Error("Value setting in goroutines failed. Value not found. expected to find key %s and value %s", value.inputkey, value.inputvalue)
+			t.Errorf("Value setting in goroutines failed. Value not found. expected to find key %s and value %s", value.inputkey, value.inputvalue)
 		}
 	}
 }
 
 func TestGet(t *testing.T) {
-	teardownTestCase := setupTestCase(t, time.Duration(1*time.Second))
+	teardownTestCase := setupTestCase(t, time.Duration(1*time.Hour), true)
 	defer teardownTestCase(t)
 	// var found bool
 	var setupCases = []TestDataItem{
@@ -139,7 +142,7 @@ func TestGet(t *testing.T) {
 		entry, ok := genericCache.Get(value.inputkey)
 		if ok {
 			if entry != value.inputvalue {
-				t.Error("Value getting failed. Value is not correct. expected to find value %s, got %s", value.inputvalue, entry)
+				t.Errorf("Value getting failed. Value is not correct. expected to find value %s, got %s", value.inputvalue, entry)
 			}
 		} else {
 			if !value.expectedFail {
@@ -150,6 +153,7 @@ func TestGet(t *testing.T) {
 
 	//test for concurrent reads
 	for _, value := range testCases {
+		testwg.Add(1)
 		go func(value TestDataItem, cache GenericMemoryCache) {
 			entry, ok := genericCache.Get(value.inputkey)
 			if ok {
@@ -157,16 +161,19 @@ func TestGet(t *testing.T) {
 					t.Errorf("Value retrieval test FAILED. Value is not correct. expected to find value %s, got %s", value.inputvalue, entry)
 				}
 			} else {
-				t.Errorf("Key retrieval test FAILED. Key not found. expected to find key %s", value.inputkey)
+				if !value.expectedFail {
+					t.Errorf("Key retrieval test FAILED. Key not found. expected to find key %s", value.inputkey)
+				}
 			}
+			testwg.Done()
 		}(value, genericCache)
 
 	}
-
+	testwg.Wait()
 }
 
 func TestDelete(t *testing.T) {
-	teardownTestCase := setupTestCase(t, time.Duration(1*time.Second))
+	teardownTestCase := setupTestCase(t, time.Duration(1*time.Hour), true)
 	defer teardownTestCase(t)
 	// var found bool
 	var setupCases = []TestDataItem{
@@ -197,15 +204,17 @@ func TestDelete(t *testing.T) {
 			t.Errorf("Value deletion test FAILED. found key: %s, when it was not supposed to exist", value.inputkey)
 		}
 	}
+
 }
 
+//test manual cleaning
 func TestClean(t *testing.T) {
-	teardownTestCase := setupTestCase(t, time.Duration(1*time.Second))
+	teardownTestCase := setupTestCase(t, time.Duration(1*time.Hour), false)
 	defer teardownTestCase(t)
 	// var found bool
 	var setupCases = []TestDataItem{
-		{"teststring", "Just some random test string", time.Duration(10 * time.Second), false},
-		{"integerkey", int(64), time.Duration(20 * time.Second), false},
+		{"teststring", "Just some random test string", time.Duration(5 * time.Second), false},
+		{"integerkey", int(64), time.Duration(1 * time.Minute), false},
 	}
 
 	for _, value := range setupCases {
@@ -217,23 +226,16 @@ func TestClean(t *testing.T) {
 			t.Errorf("dataset length test FAILED. expected dataset length %d, got %d", 2, len(datastruct.data))
 		}
 
-		time.Sleep(time.Duration(10 * time.Second))
+		time.Sleep(time.Duration(5 * time.Second))
 		datastruct.clean()
 		if len(datastruct.data) != 1 {
 			t.Errorf("dataset length test FAILED. expected dataset length %d, got %d", 1, len(datastruct.data))
-		}
-
-		time.Sleep(time.Duration(10 * time.Second))
-		datastruct.clean()
-		if len(datastruct.data) != 0 {
-			t.Errorf("dataset length test FAILED. expected dataset length %d, got %d", 0, len(datastruct.data))
 		}
 	}
 }
 
 func TestStartStaleDataCleaner(t *testing.T) {
-	teardownTestCase := setupTestCase(t, time.Duration(1*time.Second))
-
+	teardownTestCase := setupTestCase(t, time.Duration(5*time.Millisecond), false)
 	datastruct, ok := genericCache.(*genericMemoryCacheStruct)
 	if ok {
 		datastruct.StartStaleDataCleaner(&testwg)
@@ -242,14 +244,23 @@ func TestStartStaleDataCleaner(t *testing.T) {
 	// var found bool
 	var setupCases = []TestDataItem{
 		{"teststring", "Just some random test string", time.Duration(1 * time.Second), false},
-		{"integerkey", int(64), time.Duration(2 * time.Microsecond), false},
-		{"float32key", float32(64.00), time.Duration(5 * time.Microsecond), false},
-		{"float64key", float64(64.00), time.Duration(10 * time.Microsecond), false},
-		{"arraykey", [...]int{1, 2, 3, 4}, time.Duration(15 * time.Microsecond), false},
+		{"integerkey", int(64), time.Duration(1 * time.Minute), false},
 	}
 
 	for _, value := range setupCases {
 		genericCache.Set(value.inputkey, value.inputvalue, value.inputttl)
 	}
 
+	time.Sleep(time.Duration(5 * time.Second))
+	//check the results, by the time this code is reached cache should be empty, due to automatic stale data cleaner
+	datastruct, ok = genericCache.(*genericMemoryCacheStruct)
+	if ok {
+		datastruct.doneCh <- struct{}{}
+		if len(datastruct.data) != 1 {
+			t.Errorf("StaleDataCleaner test FAILED. datastruct is not empty. expected len() of %d, got %d", 1, len(datastruct.data))
+		}
+	}
+
+	//waits until stale data cleaner goroutine stops
+	testwg.Wait()
 }
