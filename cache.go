@@ -1,4 +1,4 @@
-package main
+package cache
 
 import (
 	"sync"
@@ -131,11 +131,11 @@ func Cleanup(gcache GenericMemoryCache) {
 	gcache = nil
 }
 
-func main() {
-	cachestruct, closure := NewGenericMemoryCache(time.Duration(1 * time.Second))
-	defer closure(cachestruct)
-	var genericCache GenericMemoryCache = cachestruct
-	genericCache.Set("teststring", "just a random string", time.Duration(1*time.Second))
-	genericCache.Set("integerkey", int(64), time.Duration(1*time.Second))
-	time.Sleep(time.Duration(20 * time.Second))
-}
+// func main() {
+// 	cachestruct, closure := NewGenericMemoryCache(time.Duration(1 * time.Second))
+// 	defer closure(cachestruct)
+// 	var genericCache GenericMemoryCache = cachestruct
+// 	genericCache.Set("teststring", "just a random string", time.Duration(1*time.Second))
+// 	genericCache.Set("integerkey", int(64), time.Duration(1*time.Second))
+// 	time.Sleep(time.Duration(20 * time.Second))
+// }
