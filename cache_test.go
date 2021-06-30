@@ -1,4 +1,4 @@
-package cache
+package main
 
 import (
 	"fmt"
@@ -37,27 +37,29 @@ func setupTestCase(t *testing.T, interval time.Duration, useDefaultConstructor b
 	t.Log("SetUp Test Case")
 
 	if useDefaultConstructor {
-		genericCache = NewGenericMemoryCache(interval)
+		genericCache, _ = NewGenericMemoryCache(interval)
 	} else {
 		genericCache = &genericMemoryCacheStruct{
 			data:   make(map[string]*cacheData),
 			ticker: time.NewTicker(interval),
 			doneCh: make(chan struct{}),
 		}
+
 	}
 	//teardown
 	return func(t *testing.T) {
 		t.Log("Teardown Test Case")
-		datastruct, ok := genericCache.(*genericMemoryCacheStruct)
-		if ok {
-			datastruct.ticker.Stop()
-			close(datastruct.doneCh)
-			for key := range datastruct.data {
-				delete(datastruct.data, key)
-			}
-			datastruct.data = nil
-		}
-		genericCache = nil
+		Cleanup(genericCache)
+		// datastruct, ok := genericCache.(*genericMemoryCacheStruct)
+		// if ok {
+		// 	datastruct.ticker.Stop()
+		// 	close(datastruct.doneCh)
+		// 	for key := range datastruct.data {
+		// 		delete(datastruct.data, key)
+		// 	}
+		// 	datastruct.data = nil
+		// }
+		// genericCache = nil
 	}
 }
 func TestSet(t *testing.T) {

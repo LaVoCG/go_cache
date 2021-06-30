@@ -1,4 +1,4 @@
-package cache
+package main
 
 import (
 	"sync"
@@ -89,14 +89,52 @@ func (gcache *genericMemoryCacheStruct) StartStaleDataCleaner(wg *sync.WaitGroup
 
 }
 
+func stopCleaner(gcache *genericMemoryCacheStruct) {
+	gcache.ticker.Stop()
+	gcache.doneCh <- struct{}{}
+}
+
 // constructor function to initialize map data type
-func NewGenericMemoryCache(cleaningInterval time.Duration) *genericMemoryCacheStruct {
+func NewGenericMemoryCache(cleaningInterval time.Duration) (*genericMemoryCacheStruct, func(*genericMemoryCacheStruct)) {
 	cache := &genericMemoryCacheStruct{
 		data:   make(map[string]*cacheData),
 		ticker: time.NewTicker(cleaningInterval),
 		doneCh: make(chan struct{}),
 	}
 	// start background expired data cleaner
-	cache.StartStaleDataCleaner(&wg)
-	return cache
+	if cleaningInterval > 0 {
+		cache.StartStaleDataCleaner(&wg)
+		//closure callback to be used in defer as a "deconstructor" to clean up and stop cleaner goroutine
+		closure := func(cache *genericMemoryCacheStruct) {
+			stopCleaner(cache)
+			for key := range cache.data {
+				delete(cache.data, key)
+			}
+
+		}
+		return cache, closure
+	}
+
+	return cache, nil
+}
+
+func Cleanup(gcache GenericMemoryCache) {
+	datastruct, ok := gcache.(*genericMemoryCacheStruct)
+	if ok {
+		stopCleaner(datastruct)
+		for key := range datastruct.data {
+			delete(datastruct.data, key)
+		}
+		datastruct.data = nil
+	}
+	gcache = nil
+}
+
+func main() {
+	cachestruct, closure := NewGenericMemoryCache(time.Duration(1 * time.Second))
+	defer closure(cachestruct)
+	var genericCache GenericMemoryCache = cachestruct
+	genericCache.Set("teststring", "just a random string", time.Duration(1*time.Second))
+	genericCache.Set("integerkey", int(64), time.Duration(1*time.Second))
+	time.Sleep(time.Duration(20 * time.Second))
 }
