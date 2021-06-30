@@ -91,7 +91,8 @@ func (gcache *genericMemoryCacheStruct) StartStaleDataCleaner(wg *sync.WaitGroup
 
 func stopCleaner(gcache *genericMemoryCacheStruct) {
 	gcache.ticker.Stop()
-	gcache.doneCh <- struct{}{}
+	// gcache.doneCh <- struct{}{}
+	close(gcache.doneCh)
 }
 
 // constructor function to initialize map data type

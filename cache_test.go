@@ -50,16 +50,7 @@ func setupTestCase(t *testing.T, interval time.Duration, useDefaultConstructor b
 	return func(t *testing.T) {
 		t.Log("Teardown Test Case")
 		Cleanup(genericCache)
-		// datastruct, ok := genericCache.(*genericMemoryCacheStruct)
-		// if ok {
-		// 	datastruct.ticker.Stop()
-		// 	close(datastruct.doneCh)
-		// 	for key := range datastruct.data {
-		// 		delete(datastruct.data, key)
-		// 	}
-		// 	datastruct.data = nil
-		// }
-		// genericCache = nil
+
 	}
 }
 func TestSet(t *testing.T) {
@@ -258,6 +249,7 @@ func TestStartStaleDataCleaner(t *testing.T) {
 	datastruct, ok = genericCache.(*genericMemoryCacheStruct)
 	if ok {
 		datastruct.doneCh <- struct{}{}
+		// close(datastruct.doneCh)
 		if len(datastruct.data) != 1 {
 			t.Errorf("StaleDataCleaner test FAILED. datastruct is not empty. expected len() of %d, got %d", 1, len(datastruct.data))
 		}
